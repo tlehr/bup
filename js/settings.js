@@ -80,7 +80,11 @@ function load() {
 		var new_settings = JSON.parse(json_str);
 		utils.obj_update(res, new_settings);
 	}
-	if ((res.tablet_mode !== 'umpire') && (res.tablet_mode !== 'scorecard')) {
+	if (
+		(res.tablet_mode !== 'umpire') &&
+		(res.tablet_mode !== 'scorecard') &&
+		(res.tablet_mode !== 'registration_check')
+	) {
 		res.tablet_mode = 'umpire';
 	}
 	return res;
@@ -228,6 +232,7 @@ function update_refclient(s) {
 
 function _update_tablet_mode_ui(s) {
 	var is_scorecard = !!(s && s.settings && s.settings.tablet_mode === 'scorecard');
+	var is_registration_check = !!(s && s.settings && s.settings.tablet_mode === 'registration_check');
 	[
 		'shuttle_counter',
 		'negative_timers',
@@ -242,7 +247,7 @@ function _update_tablet_mode_ui(s) {
 		if (!container) {
 			return;
 		}
-		uiu.visible(container, !is_scorecard);
+		uiu.visible(container, !is_scorecard && !is_registration_check);
 	});
 }
 

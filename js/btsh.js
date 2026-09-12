@@ -38,6 +38,58 @@ function btsh(baseurl, tournament_key) {
 	})();
 	var v2_debug = v2_debug_forced_by_url;
 	var battery;
+
+	function _is_valid_tablet_mode(tablet_mode) {
+		return (
+			tablet_mode === 'umpire' ||
+			tablet_mode === 'scorecard' ||
+			tablet_mode === 'registration_check'
+		);
+	}
+
+	function _registration_check_url() {
+		return '/admin/t/' + encodeURIComponent(tournament_key) + '/registration_check';
+	}
+
+	function _show_registration_check() {
+		if (!tournament_key || typeof document === 'undefined') {
+			return false;
+		}
+		var target = _registration_check_url();
+		var overlay = document.getElementById('bts_registration_check_overlay');
+		if (!overlay) {
+			overlay = document.createElement('div');
+			overlay.id = 'bts_registration_check_overlay';
+			overlay.style.position = 'fixed';
+			overlay.style.inset = '0';
+			overlay.style.zIndex = '2147483647';
+			overlay.style.background = '#f3f4f6';
+			overlay.style.overflow = 'hidden';
+			var iframe = document.createElement('iframe');
+			iframe.setAttribute('title', 'Anmeldung');
+			iframe.style.width = '100%';
+			iframe.style.height = '100%';
+			iframe.style.border = '0';
+			iframe.style.display = 'block';
+			overlay.appendChild(iframe);
+			document.body.appendChild(overlay);
+		}
+		var frame = overlay.querySelector('iframe');
+		if (frame && frame.getAttribute('src') !== target) {
+			frame.setAttribute('src', target);
+		}
+		return true;
+	}
+
+	function _hide_registration_check() {
+		if (typeof document === 'undefined') {
+			return;
+		}
+		var overlay = document.getElementById('bts_registration_check_overlay');
+		if (overlay && overlay.parentNode) {
+			overlay.parentNode.removeChild(overlay);
+		}
+	}
 	
 
 	if (!battery && (typeof navigator != 'undefined') && navigator.getBattery) {
@@ -1285,7 +1337,7 @@ function btsh(baseurl, tournament_key) {
 				) {
 					next_settings.tablet_mode = previous_settings.tablet_mode;
 				}
-				if ((next_settings.tablet_mode !== 'umpire') && (next_settings.tablet_mode !== 'scorecard')) {
+				if (!_is_valid_tablet_mode(next_settings.tablet_mode)) {
 					next_settings.tablet_mode = 'umpire';
 				}
 				var had_assigned_court = !!(
@@ -1324,6 +1376,13 @@ function btsh(baseurl, tournament_key) {
 				);
 				state.settings = next_settings;
 				state.dads = (c.val && c.val.advertisements) ? c.val.advertisements : [];
+				if (next_settings.devicemode === 'umpire' && next_settings.tablet_mode === 'registration_check') {
+					settings.update(state);
+					settings.on_mode_change(state);
+					_show_registration_check();
+					break;
+				}
+				_hide_registration_check();
 				if (has_assigned_court) {
 					btsh_court_selection_pending = null;
 				}
@@ -1437,6 +1496,10 @@ function btsh(baseurl, tournament_key) {
 	}
 
 	function send_bts_not_reachable() {
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			clear_bts_not_reachable();
+			return;
+		}
 		bts_connection_error_active = true;
 		if (bts_update_callback && bts_update_callback != null) {
 			var msg = state._('network:error:bts');
@@ -1449,7 +1512,7 @@ function btsh(baseurl, tournament_key) {
 
 	function clear_bts_not_reachable() {
 		network.errstate('btsh.score', null);
-		if (bts_connection_error_active && bts_update_callback && bts_update_callback != null && state && state.bts_event) {
+		if (bts_connection_error_active && bts_update_callback && bts_update_callback != null && state) {
 			bts_update_callback(null, state, state.bts_event || null);
 		}
 		bts_connection_error_active = false;

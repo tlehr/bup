@@ -194,6 +194,7 @@ var i18n_de = {
 'settings:tablet_mode': 'Tablet-Modus',
 'settings:tablet_mode:umpire': 'Ergebniseingabe (Schiedsrichter)',
 'settings:tablet_mode:scorecard': 'Ergebniseingabe (Spielzettel)',
+'settings:tablet_mode:registration_check': 'Anmeldung',
 'settings:Abort Manual Edit': 'Manuelles Bearbeiten abbrechen',
 'settings:Matches': 'Spiele',
 'settings:Event Scoresheets': 'Schiedsrichterzettel',
