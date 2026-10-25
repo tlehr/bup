@@ -9304,6 +9304,11 @@ function update(err, s, event) {
 		return;
 	}
 
+	if (!event) {
+		uiu.el(container, 'div', 'display_loading');
+		return;
+	}
+
 	if (!event.courts) {
 		uiu.el(container, 'div', 'display_error', s._('displaymode:no courts'));
 	}

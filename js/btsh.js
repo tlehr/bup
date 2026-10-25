@@ -1512,10 +1512,13 @@ function btsh(baseurl, tournament_key) {
 
 	function clear_bts_not_reachable() {
 		network.errstate('btsh.score', null);
-		if (bts_connection_error_active && bts_update_callback && bts_update_callback != null && state) {
-			bts_update_callback(null, state, state.bts_event || null);
-		}
+		var had_error = bts_connection_error_active;
 		bts_connection_error_active = false;
+		if (had_error && bts_update_callback && state) {
+			// An open socket is not yet a restored event. Wait for the initial
+			// state instead of reporting success with a null tournament.
+			bts_update_callback(state.bts_event ? null : { errtype: 'loading' }, state, state.bts_event || null);
+		}
 	}
 
 	return {
