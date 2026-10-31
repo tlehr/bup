@@ -3323,6 +3323,7 @@ _describe('calc_state', function() {
 			start: 100000,
 			duration: 120000,
 			exigent: 5499,
+			restart: true,
 		});
 
 		presses.push({
@@ -3336,7 +3337,22 @@ _describe('calc_state', function() {
 			start: 100000,
 			duration: 120000,
 			exigent: 5499,
+			restart: true,
 		});
+
+		// Restarting the warmup resets its countdown and retains the restart control.
+		presses.push({
+			type: 'timer_restart',
+			timestamp: 110000,
+		});
+		s = state_after(presses, DOUBLES_SETUP, {});
+		assert.deepStrictEqual(s.timer, {
+			start: 110000,
+			duration: 120000,
+			exigent: 5499,
+			restart: true,
+		});
+		assert.strictEqual(bup.timer.calc(s, 170000).str, '1:00');
 
 		presses.push({
 			type: 'love-all',
@@ -3626,6 +3642,7 @@ _describe('calc helper functions', function() {
 			start: 1234000,
 			exigent: 5499,
 			duration: 120000,
+			restart: true,
 		});
 
 		setup.warmup = 'legacy';
@@ -3634,6 +3651,7 @@ _describe('calc helper functions', function() {
 			start: 1234000,
 			exigent: 5499,
 			duration: 120000,
+			restart: true,
 		});
 
 		setup.warmup = 'none';
@@ -3646,6 +3664,7 @@ _describe('calc helper functions', function() {
 			start: 1234000,
 			exigent: 30499,
 			duration: 120000,
+			restart: true,
 		});
 	});
 

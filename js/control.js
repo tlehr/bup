@@ -231,6 +231,11 @@ function on_press(press, s) {
 		state.ui.faketime_val :
 		Date.now()
 	);
+	if (press.type === 'note') {
+		press.note_id = press.note_id || utils.uuid();
+		press.note_role = 'umpire';
+		press.score = calc.netscore(s, true);
+	}
 	s.presses.push(press);
 
 	calc.state(s);

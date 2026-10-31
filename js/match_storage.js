@@ -7,8 +7,12 @@ function store(s) {
 	}
 
 	var presses = s.presses;
-	if (presses && presses[presses.length - 1].type == 'postmatch-confirm') {
-		presses = presses.slice(0, presses.length - 1);
+	// Stored matches can be resumed for corrections. Remarks may follow the
+	// confirmation, so remove that confirmation while retaining every note.
+	var last_action = presses ? presses.length - 1 : -1;
+	while (last_action >= 0 && presses[last_action].type === 'note') last_action--;
+	if (last_action >= 0 && presses[last_action].type === 'postmatch-confirm') {
+		presses = presses.slice(0, last_action).concat(presses.slice(last_action + 1));
 	}
 	var cleaned_s = {
 		metadata: s.metadata,

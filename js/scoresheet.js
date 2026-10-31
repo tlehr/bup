@@ -246,7 +246,10 @@ function parse_match(state, col_count) {
 		lang: state.lang,
 		_: state._,
 	};
-	var notes = [];
+	var role_labels = {tournament_control: 'Turnierleitung', referee: 'Referee'};
+	var notes = calc.note_history(state.presses).filter(function(note) { return !note.deleted; }).map(function(note) {
+		return (role_labels[note.role] ? role_labels[note.role] + ': ' : '') + note.val;
+	});
 
 	calc.init_state(s, state.setup);
 	s.presses = state.presses;
@@ -580,7 +583,6 @@ function parse_match(state, col_count) {
 			});
 			break;
 		case 'note':
-			notes.push(press.val);
 			break;
 		}
 
@@ -660,6 +662,71 @@ function _draw_mark_circle(container, cell, cell_width, cell_height, cols_left, 
 		'cy': cy,
 		'ry': ry,
 	}, container);
+}
+
+// Notes use the unused score rows on the same sheet. Preserve paragraph breaks
+// and fit longer comments into that space rather than drawing beyond the page.
+function _render_notes(container, cells, left, right, cell_height) {
+	var notes = cells.filter(function(cell) { return cell.type === 'note'; });
+	if (!notes.length) return;
+	var top = Math.min(570 + 220 * notes[0].table, 1890) + 3;
+	var bottom = 1947; // Leave the signature lines at y=2000 clear.
+	var probe = _svg_el('text', {}, container);
+	var style = getComputedStyle(probe);
+	var normal_size = parseFloat(style.fontSize);
+	var font_size = normal_size;
+	var context = document.createElement('canvas').getContext('2d');
+	var lines, line_height;
+	function wrap(value) {
+		var result = [];
+		value.replace(/\r\n?/g, '\n').split('\n').forEach(function(paragraph) {
+			var line = '';
+			paragraph.trim().split(/\s+/).forEach(function(word) {
+				if (!word) return;
+				if (line && context.measureText(line + ' ' + word).width <= right - left) {
+					line += ' ' + word;
+					return;
+				}
+				if (line) result.push(line);
+				line = '';
+				Array.from(word).forEach(function(character) {
+					if (line && context.measureText(line + character).width > right - left) {
+						result.push(line);
+						line = '';
+					}
+					line += character;
+				});
+			});
+			result.push(line);
+		});
+		return result;
+	}
+	// Rewrap at the fitted font size; shorter lines often recover enough space
+	// without reducing the font as much as scaling a whole text block would.
+	do {
+		context.font = style.fontWeight + ' ' + font_size + 'px ' + style.fontFamily;
+		lines = [];
+		notes.forEach(function(note) { lines = lines.concat(wrap(note.val)); });
+		line_height = cell_height * font_size / normal_size;
+		if (lines.length * line_height <= bottom - top) break;
+		font_size *= 0.9;
+	} while (font_size > 1);
+	container.removeChild(probe);
+	var group = _svg_el('g', {'class': 'scoresheet_notes'}, container);
+	_svg_el('rect', {
+		'class': 'table_longtext_background',
+		x: left, y: top, width: right - left, height: lines.length * line_height,
+	}, group);
+	lines.forEach(function(line, index) {
+		if (!line) return; // Keep the paragraph's space without an empty SVG text box.
+		var text = _svg_el('text', {
+			'class': 'table_note',
+			x: left, 'font-size': font_size,
+		}, group, line);
+		// An inline style takes precedence over the sheet template's text rule.
+		text.style.fontSize = font_size + 'px';
+		_svg_align_vcenter(text, top + (index + 0.5) * line_height);
+	});
 }
 
 function sheet_render(s, svg) {
@@ -942,20 +1009,7 @@ function sheet_render(s, svg) {
 
 			break;
 		case 'note':
-			bg = _svg_el('rect', {
-				'class': (((cell.table < 6) && (cell.row > 1)) ? 'table_longtext_background shaded' : 'table_longtext_background'),
-			}, t);
-
-			text = _svg_el('text', {
-				'x': ((cell.table < 6) ? (cols_left + padding_left) : table_left),
-			}, t, cell.val);
-			_svg_align_vcenter(text, table_top + cell.row * cell_height + cell_height / 2);
-
-			bb = text.getBBox();
-			bg.setAttribute('x', bb.x);
-			bg.setAttribute('y', bb.y + text_y_padding);
-			bg.setAttribute('width', bb.width);
-			bg.setAttribute('height', bb.height - 2 * text_y_padding);
+			// Render all comments together below the recorded games.
 			break;
 		case 'longtext':
 			bg = _svg_el('rect', {
@@ -1012,6 +1066,7 @@ function sheet_render(s, svg) {
 			_svg_align_vcenter(text, table_top + cell.row * cell_height + cell_height / 2);
 		}
 	});
+	_render_notes(t, cells, cols_left + padding_left, table_left + table_width - padding_left, cell_height);
 }
 
 function sheet_name(setup) {

@@ -1,4 +1,5 @@
 var calc = (function() {
+/* global Map */
 'use strict';
 
 var SPECIAL_PRESSES = [
@@ -1025,8 +1026,10 @@ function init_calc(s) {
 }
 
 function state(s) {
-	if (s.presses.length > 0) {
-		s.metadata.updated = s.presses[s.presses.length - 1].timestamp;
+	var updated_index = s.presses.length - 1;
+	while (updated_index >= 0 && s.presses[updated_index].type === 'note' && s.presses[updated_index].source === 'tournament-control') updated_index--;
+	if (updated_index >= 0) {
+		s.metadata.updated = s.presses[updated_index].timestamp;
 	}
 	// Reset properties about to be recalculated
 	s.metadata.start = null;
@@ -1103,10 +1106,18 @@ function court(s) {
 
 function undo(s) {
 	s.flattened_presses = [];
+	var external_notes = [];
 	s.redo_stack = [];
 	s.undo_possible = false;
 	s.redo_possible = false;
 	s.presses.forEach(function(press) {
+		// Tournament-control remarks have their own revision history. A rally
+		// undo on the tablet must still undo the rally, regardless of when a
+		// remote remark arrived or was included in a restored match history.
+		if (press.type === 'note' && press.source === 'tournament-control') {
+			external_notes.push(press);
+			return;
+		}
 		if (press.type == 'undo') {
 			if (! s.undo_possible) {
 				throw new Error('Nothing to undo');
@@ -1128,6 +1139,48 @@ function undo(s) {
 
 		s.undo_possible = s.flattened_presses.length > 0;
 		s.redo_possible = s.redo_stack.length > 0;
+	});
+	if (external_notes.length) s.flattened_presses = s.flattened_presses.concat(external_notes);
+}
+
+// Resolve the current wording and retain every saved version. Older BUP notes
+// have no ID; their timestamp and occurrence remain stable as points are added.
+function note_history(presses) {
+	var history = {presses: presses || []};
+	undo(history);
+	var keys = new Map(), occurrences = Object.create(null);
+	history.presses.forEach(function(press, index) {
+		if (press.type !== 'note') return;
+		var stamp = String(press.timestamp || 0);
+		var key = press.note_id ? 'id:' + press.note_id : 'bup:' + stamp + ':' + (occurrences[stamp] || 0);
+		if (!press.note_id) occurrences[stamp] = (occurrences[stamp] || 0) + 1;
+		keys.set(press, {key: key, index: index});
+	});
+	var entries = [], by_key = Object.create(null);
+	history.flattened_presses.forEach(function(press) {
+		if (press.type !== 'note') return;
+		var location = keys.get(press), key = location.key, entry = press.note_target && by_key[press.note_target];
+		// A later tablet snapshot can omit a locally undone/replaced BUP note.
+		// Its first control correction retains the original as audit evidence.
+		if (!entry && press.note_origin && press.note_origin.key === press.note_target) {
+			entry = {key: press.note_target, versions: [press.note_origin]};
+			entries.push(entry);
+			by_key[press.note_target] = entry;
+		}
+		if (!entry) {
+			entry = {key: key, versions: []};
+			entries.push(entry);
+		}
+		entry.val = press.val;
+		entry.role = press.note_role || 'umpire';
+		entry.deleted = press.note_deleted === true;
+		entry.latest_key = key;
+		entry.versions.push({key: key, val: press.val, timestamp: press.timestamp, source: press.source, score: press.score, index: location.index,
+			role: entry.role, deleted: entry.deleted});
+		by_key[key] = entry;
+	});
+	return entries.sort(function(a, b) {
+		return (Number(a.versions[0].timestamp) || 0) - (Number(b.versions[0].timestamp) || 0);
 	});
 }
 
@@ -1241,7 +1294,10 @@ function duration(s) {
 		return; // undefined
 	}
 
-	return fps[fps.length - 1].timestamp - fps[0].timestamp;
+	var last = fps.length - 1;
+	while (last >= 0 && fps[last].type === 'note' && fps[last].source === 'tournament-control') last--;
+	if (last < 0) return;
+	return fps[last].timestamp - fps[0].timestamp;
 }
 
 return {
@@ -1260,6 +1316,7 @@ return {
 	max_game_count: max_game_count,
 	match_winner: match_winner,
 	netscore: netscore,
+	note_history: note_history,
 	press_char: press_char,
 	score_str: score_str,
 	server: server,
