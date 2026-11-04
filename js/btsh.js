@@ -43,19 +43,20 @@ function btsh(baseurl, tournament_key) {
 		return (
 			tablet_mode === 'umpire' ||
 			tablet_mode === 'scorecard' ||
-			tablet_mode === 'registration_check'
+			tablet_mode === 'registration_check' ||
+			tablet_mode === 'self_check_in'
 		);
 	}
 
-	function _registration_check_url() {
-		return '/admin/t/' + encodeURIComponent(tournament_key) + '/registration_check';
+	function _registration_check_url(mode) {
+		return '/admin/t/' + encodeURIComponent(tournament_key) + '/' + (mode === 'self_check_in' ? 'self_check_in' : 'registration_check');
 	}
 
-	function _show_registration_check() {
+	function _show_registration_check(mode) {
 		if (!tournament_key || typeof document === 'undefined') {
 			return false;
 		}
-		var target = _registration_check_url();
+		var target = _registration_check_url(mode);
 		var overlay = document.getElementById('bts_registration_check_overlay');
 		if (!overlay) {
 			overlay = document.createElement('div');
@@ -75,6 +76,7 @@ function btsh(baseurl, tournament_key) {
 			document.body.appendChild(overlay);
 		}
 		var frame = overlay.querySelector('iframe');
+		if (frame) frame.setAttribute('title', mode === 'self_check_in' ? 'Selbst-Check-in' : 'Anmeldung');
 		if (frame && frame.getAttribute('src') !== target) {
 			frame.setAttribute('src', target);
 		}
@@ -1376,10 +1378,10 @@ function btsh(baseurl, tournament_key) {
 				);
 				state.settings = next_settings;
 				state.dads = (c.val && c.val.advertisements) ? c.val.advertisements : [];
-				if (next_settings.devicemode === 'umpire' && next_settings.tablet_mode === 'registration_check') {
+				if (next_settings.devicemode === 'umpire' && (next_settings.tablet_mode === 'registration_check' || next_settings.tablet_mode === 'self_check_in')) {
 					settings.update(state);
 					settings.on_mode_change(state);
-					_show_registration_check();
+					_show_registration_check(next_settings.tablet_mode);
 					break;
 				}
 				_hide_registration_check();
