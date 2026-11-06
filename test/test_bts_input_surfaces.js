@@ -24,22 +24,30 @@ describe('BTS input surfaces', function() {
 
  function client() {
   const document = {body:element('body'), createElement:element,
-   getElementById(id) {return this.body.children.find(child => child.id === id) || null;}};
-  const sockets = [];
+   getElementById(id) {return this.body.children.find(child => child.id === id) || null;},
+   querySelector:() => null, querySelectorAll:() => []};
+  const sockets = [], rendered = [];
   const context = {
    window:{location:{protocol:'http:', hostname:'bts.test', port:'4433', search:'', hash:''}},
    document, URLSearchParams, navigator:{}, setTimeout:() => 0, clearTimeout() {},
-   state:{settings:{devicemode:'umpire', tablet_mode:'umpire'}},
+   state:{settings:{devicemode:'umpire', tablet_mode:'umpire'}, ui:{}},
    utils:{deep_copy:copy, obj_update:Object.assign}, network:{errstate() {}},
-   settings:{default_settings:{}, update() {}, on_mode_change() {}, load:() => ({})},
+   settings:{default_settings:{}, update() {}, on_mode_change() {}, load:() => ({}),
+    hide_displaymode() {}, hide() {}, get_mode:s => s.settings.devicemode},
+   uiu:{show_qs() {}, addClass_qs() {}},
+   displaymode:{render_v2_display_state(s, msg) {
+    rendered.push({state:s, message:msg, overlay:document.getElementById('bts_registration_check_overlay')});
+    return true;
+   }},
    WebSocket:class {constructor() {this.readyState = 1;sockets.push(this);}},
   };
   vm.runInNewContext(fs.readFileSync(require.resolve('../js/btsh'), 'utf8').split('/*@DEV*/')[0], context);
   const instance = context.btsh('http://bts.test:4433/', 'cup 1');
   instance.subscribe(context.state, () => {});
   assert.strictEqual(sockets.length, 1);
-  const update = mode => sockets[0].onmessage({data:JSON.stringify({type:'change', ctype:'settings-update', val:{devicemode:'umpire', tablet_mode:mode}})});
-  return {context, document, update};
+  const receive = message => sockets[0].onmessage({data:JSON.stringify(message)});
+  const update = mode => receive({type:'change', ctype:'settings-update', val:{devicemode:'umpire', tablet_mode:mode}});
+  return {context, document, update, receive, rendered, sockets};
  }
  it('opens the existing self-check-in page when the assigned profile selects it', function() {
   const c = client();c.update('self_check_in');
@@ -60,5 +68,54 @@ describe('BTS input surfaces', function() {
   assert.strictEqual(frame.getAttribute('src'), '/admin/t/cup%201/registration_check');
   assert.strictEqual(frame.getAttribute('title'), 'Anmeldung');
   assert.strictEqual(c.document.body.children.length, 1);
+ });
+
+ const displayMessages = [
+  {type:'display_state', court:{id:'court-1', label:'1'}, match:null},
+  {type:'display_multi_state', selected_court_id:'__multi__', court_states:[{court:{id:'court-1', label:'1'}, match:null}]},
+  {type:'court_picker_state', courts:[{court_id:'court-1', court_num:'1'}]},
+ ];
+ ['registration_check', 'self_check_in'].forEach(mode => {
+  displayMessages.forEach(payload => {
+   it('switches directly from ' + mode + ' to ' + payload.type + ' and back', function() {
+    const c = client();c.update(mode);
+    const overlay = c.document.getElementById('bts_registration_check_overlay');
+    assert(overlay);
+    const unrelatedFrame = element('iframe');
+    c.document.body.appendChild(unrelatedFrame);
+    const message = Object.assign({client_mode:'display', display:{client_id:'screen-1'},
+     display_settings:{style:'topcourts', d_c0:'#aabbcc'}}, payload);
+
+    c.receive(message);
+    assert.strictEqual(c.document.getElementById('bts_registration_check_overlay'), null);
+    assert.strictEqual(c.context.state.settings.devicemode, 'display');
+    assert.strictEqual(c.context.state.settings.displaymode_style, 'topcourts');
+    assert.strictEqual(c.context.state.settings.d_c0, '#aabbcc');
+    assert.strictEqual(c.context.state.ui.displaymode_visible, true);
+    assert.strictEqual(c.rendered.length, 1);
+    assert.strictEqual(c.rendered[0].message.type, payload.type);
+    assert.strictEqual(c.rendered[0].overlay, null, 'the hosted page must be gone before rendering');
+    assert.strictEqual(unrelatedFrame.parentNode, c.document.body);
+
+    c.receive(message);
+    assert.strictEqual(c.rendered.length, 2);
+    c.update(mode);
+    const newOverlay = c.document.getElementById('bts_registration_check_overlay');
+    assert(newOverlay);
+    assert.notStrictEqual(newOverlay, overlay);
+    assert.strictEqual(newOverlay.querySelector('iframe').getAttribute('src'), '/admin/t/cup%201/' + mode);
+    assert.strictEqual(c.context.state.settings.devicemode, 'umpire');
+    c.update(mode);
+    assert.strictEqual(c.document.getElementById('bts_registration_check_overlay'), newOverlay);
+    assert.strictEqual(c.document.body.children.length, 2);
+    assert.strictEqual(c.sockets.length, 1, 'profile changes must keep the connection');
+   });
+  });
+  it('still switches from ' + mode + ' to the scoring tablet', function() {
+   const c = client();c.update(mode);c.update('umpire');
+   assert.strictEqual(c.document.getElementById('bts_registration_check_overlay'), null);
+   assert.strictEqual(c.context.state.settings.tablet_mode, 'umpire');
+   assert.strictEqual(c.rendered.length, 0);
+  });
  });
 });

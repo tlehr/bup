@@ -111,7 +111,13 @@ function _match_finished(match) {
 	if (typeof match.team1_won === 'boolean') {
 		return true;
 	}
-	if (match.network_score && match.setup) {
+	if (match.setup && match.setup.state === 'finished') {
+		return true;
+	}
+	// Lightweight overviews from older servers may omit the scoring format.
+	// Keep an unknown result unlabelled instead of guessing rules or throwing
+	// again on every refresh of the court picker.
+	if (match.network_score && match.network_score.length && match.setup && (match.setup.counting || match.setup.scoring_format)) {
 		try {
 			var winner = calc.match_winner(match.setup, match.network_score);
 			return winner === 'left' || winner === 'right';

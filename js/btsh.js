@@ -787,6 +787,7 @@ function btsh(baseurl, tournament_key) {
 		if (!state) {
 			return;
 		}
+		_hide_registration_check();
 		state.ui.displaymode_visible = true;
 		if (typeof refmode_referee_ui !== 'undefined' && refmode_referee_ui && typeof refmode_referee_ui.hide === 'function') {
 			refmode_referee_ui.hide();
@@ -1037,6 +1038,7 @@ function btsh(baseurl, tournament_key) {
 			setup.match_id = match_id;
 			setup.event_name = setup.event_name || court.match.event_name || '';
 			setup.match_name = setup.match_name || court.match.round_name || '';
+			setup.state = setup.state || court.match.status;
 			setup.is_doubles = !!setup.is_doubles;
 			setup.teams = setup.teams || [
 				{ players: [{ name: court.match.team1 || 'N.N.' }] },
@@ -1045,6 +1047,8 @@ function btsh(baseurl, tournament_key) {
 			event.matches.push({
 				setup: setup,
 				network_score: court.match.network_score || [],
+				end_ts: court.match.end_ts,
+				team1_won: court.match.team1_won,
 			});
 		});
 		return event;
