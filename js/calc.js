@@ -133,6 +133,12 @@ function players_present(s) {
 		}
 
 		var setup = setup_or_counting;
+		// Scoring helpers only read these rules. Complete formats need no copy
+		// or legacy fallback for every historical rally being recalculated.
+		var complete_format = setup.scoring_format;
+		if (complete_format && complete_format.numSets && complete_format.set_points && complete_format.last_set_points) {
+			return { counting: complete_format.name || setup.counting, scoring_format: complete_format };
+		}
 		var fallback = scoring_format_from_counting(setup.counting);
 		var scoring_format = setup.scoring_format ? utils.deep_copy(setup.scoring_format) : {};
 
